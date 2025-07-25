@@ -21,9 +21,17 @@ func init() {
 
 func Run(s3 *s3.Client) {
 	s3Client = s3
-	app.Use(cors.New())
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+	}))
 	app.Use(helmet.New())
 	app.Use(fiber_logger.New())
+	app.Use(func(c *fiber.Ctx) error {
+		c.Set("Server", "Skyblock Maniacs CDN")
+		c.Set("Cross-Origin-Resource-Policy", "cross-origin")
+		return c.Next()
+	})
 
 	app.Get("/healthz", func(c *fiber.Ctx) error {
 		return c.JSON(fiber.Map{

@@ -34,24 +34,31 @@ func GetFileHandler(c *fiber.Ctx) error {
 			})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to retrieve file",
+			"error":   "Failed to retrieve file",
 			"message": err.Error(),
 		})
 	}
 	defer result.Body.Close()
-	
 
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(result.Body)
 
-	return c.Type(*result.ContentType).Send(buf.Bytes())
+	c.Set("Cache-Control", "public, max-age=31536000, immutable")
+	c.Set("Content-Type", *result.ContentType)
+
+	// For HTML files, set more permissive COEP to allow external resources
+	if result.ContentType != nil && strings.Contains(*result.ContentType, "text/html") {
+		c.Set("Cross-Origin-Embedder-Policy", "unsafe-none")
+	}
+
+	return c.Send(buf.Bytes())
 }
 
 func PostTranscriptHandler(c *fiber.Ctx) error {
 	form, err := c.MultipartForm()
 	if err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "Invalid form data",
+			"error":   "Invalid form data",
 			"message": err.Error(),
 		})
 	}
@@ -78,26 +85,26 @@ func PostTranscriptHandler(c *fiber.Ctx) error {
 	defer extractedFile.Close()
 
 	id := strings.Split(uuid.New().String(), "-")[0]
-	
+
 	extractedFileBytes, err := io.ReadAll(extractedFile)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to read file",
+			"error":   "Failed to read file",
 			"message": err.Error(),
 		})
 	}
 
 	ctx := context.Background()
 	_, err = s3Client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket: aws.String(os.Getenv("AWS_BUCKET")),
-		Key: 	aws.String("transcripts/" + id + ".html"),
+		Bucket:      aws.String(os.Getenv("AWS_BUCKET")),
+		Key:         aws.String("transcripts/" + id + ".html"),
 		ContentType: aws.String("text/html"),
-		Body:   bytes.NewReader(extractedFileBytes),
+		Body:        bytes.NewReader(extractedFileBytes),
 	})
 
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error": "Failed to upload file",
+			"error":   "Failed to upload file",
 			"message": err.Error(),
 		})
 	}
